@@ -40,7 +40,7 @@
             display: none;
         }
         .input-square-box {
-            border-bottom: 2px solid #ccc; /* Only bottom border for square box */
+            border: 1px solid #999; /* Changed from bottom-only to full border */
             padding: 4px;
             outline: none; /* Remove default outline */
             transition: border-color 0.2s; /* Smooth transition for focus effect */
@@ -128,7 +128,7 @@
                             <label class="font-size-9">Other</label>
                         </div>
                     </div>
-                    <input type="text" name="epssScore" class="mt-2 block w-full input-square-box shadow-sm font-size-9" value="Not Applicable (EPSS applies only to CVE-based vulnerabilities)" readonly>
+                    <input type="text" name="epssScore" class="mt-2 block w-full input-square-box shadow-sm font-size-9" value="N/A" readonly>
                 </div>
                 <div class="md:col-span-2">
                     <label class="block font-medium text-gray-700">Impact</label>
@@ -208,10 +208,17 @@
 
             const calculateCvssScore = (card) => {
                 let score = 0;
-
+                const cvssVectorParts = ['CVSS:3.1'];
+                
                 const getMetricValue = (metricCode) => {
                     const selected = card.querySelector(`input[name="cvss-${metricCode}-${card.id}"]:checked`);
-                    return selected ? parseFloat(selected.value) : 0;
+                    if (selected) {
+                        const optionLabel = selected.parentElement.querySelector('label').textContent;
+                        cvssVectorParts.push(`${metricCode}:${optionLabel.charAt(0)}`);
+                        return parseFloat(selected.value);
+                    }
+                    cvssVectorParts.push(`${metricCode}:N`);
+                    return 0; // Return 0 for 'N' as per CVSS formula
                 };
 
                 const av = getMetricValue('AV');
@@ -227,24 +234,31 @@
                 const exploitability = 8.22 * av * ac * pr * ui;
 
                 let impact;
-                if (s === 1.0) { // Scope is Unchanged
+                if (s === 1.0) {
                     impact = 6.42 * impactSubscore;
-                } else { // Scope is Changed
+                } else {
                     impact = 7.52 * (impactSubscore - 0.029) - 3.25 * Math.pow(impactSubscore - 0.02, 15);
                 }
 
                 if (impact <= 0) {
                     score = 0;
                 } else {
-                    if (s === 1.0) { // Scope is Unchanged
+                    if (s === 1.0) {
                         score = roundUp(Math.min(impact + exploitability, 10));
-                    } else { // Scope is Changed
+                    } else {
                         score = roundUp(Math.min(1.08 * (impact + exploitability), 10));
                     }
                 }
 
                 const cvssScoreInput = card.querySelector('[name="cvssScore"]');
-                if(cvssScoreInput) cvssScoreInput.value = score.toFixed(1);
+                if(cvssScoreInput) {
+                    if (score === 0) {
+                        cvssScoreInput.value = 'N/A';
+                    } else {
+                        const cvssVector = cvssVectorParts.join('/');
+                        cvssScoreInput.value = `${score.toFixed(1)} (${cvssVector})`;
+                    }
+                }
 
                 let severity = 'N/A';
                 let severityClass = 'bg-gray-400';
@@ -268,6 +282,7 @@
                     severityInput.className = `mt-1 block w-full input-square-box shadow-sm font-size-9 ${severityClass} text-white text-center`;
                 }
             };
+
 
             const createMetricRadios = (card, metricCode, metricName, options) => {
                 const metricContainer = card.querySelector('.cvss-metrics');
@@ -590,7 +605,7 @@
                             epssInput.focus();
                         } else {
                             epssInput.readOnly = true;
-                            epssInput.value = 'Not Applicable (EPSS applies only to CVE-based vulnerabilities)';
+                            epssInput.value = 'N/A';
                         }
                         saveData();
                     });
@@ -861,4 +876,3 @@
     </script>
 </body>
 </html>
-
