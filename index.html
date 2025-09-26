@@ -1,0 +1,864 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Security Report Generator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.9.2/html2pdf.bundle.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Verdana:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Verdana', sans-serif;
+        }
+        .report-table {
+            border-collapse: collapse;
+            border: 1px solid #00B0F0;
+            margin-bottom: 10px;
+        }
+        .report-cell {
+            border: 1px solid #00B0F0;
+            padding: 5px 8px;
+            vertical-align: top;
+            font-size: 9px;
+            line-height: 1.2;
+        }
+        .report-cell-header {
+            font-size: 10px;
+            font-weight: bold;
+        }
+        .font-size-9 {
+            font-size: 9px;
+        }
+        .font-size-10 {
+            font-size: 10px;
+        }
+        .no-margin {
+            margin: 0 !important;
+        }
+        .hidden {
+            display: none;
+        }
+        .input-square-box {
+            border-bottom: 2px solid #ccc; /* Only bottom border for square box */
+            padding: 4px;
+            outline: none; /* Remove default outline */
+            transition: border-color 0.2s; /* Smooth transition for focus effect */
+        }
+        .input-square-box:focus {
+            border-color: #3B82F6; /* Blue border on focus */
+        }
+        /* Styling for the light blue border on images */
+        .image-with-lightblue-border {
+            border: 0.25pt solid #ADD8E6; /* Light blue border */
+        }
+    </style>
+</head>
+<body class="bg-gray-100 p-4">
+
+    <div class="max-w-4xl mx-auto bg-white p-6 rounded-lg shadow-xl">
+        <h1 class="text-xl font-bold text-center mb-4 text-blue-900 font-size-10">Security Report Generator</h1>
+
+        <div id="vulnerability-list-container" class="space-y-6">
+        </div>
+
+        <div class="flex flex-col sm:flex-row gap-4 justify-center my-6">
+            <button id="addVulnerabilityBtn" type="button" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 shadow-md font-size-9">
+                Add Vulnerability
+            </button>
+            <button id="previewBtn" type="button" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 shadow-md font-size-9">
+                Preview Report
+            </button>
+            <button id="copyTableBtn" type="button" class="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-200 shadow-md font-size-9">
+                Copy Report Table
+            </button>
+        </div>
+        
+        <div id="reportPreview" class="bg-gray-50 p-6 rounded-lg shadow-inner hidden">
+            <h2 class="text-lg font-semibold mb-4 text-gray-800 font-size-10">Report Preview</h2>
+            <div id="reportContent">
+            </div>
+        </div>
+    </div>
+
+    <template id="vulnerability-template">
+        <div class="vulnerability-card border border-blue-200 p-4 rounded-lg bg-white shadow-sm">
+            <h3 class="text-md font-bold mb-4 font-size-10">New Vulnerability</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 font-size-9">
+                <div>
+                    <label class="block font-medium text-gray-700">Vulnerability ID</label>
+                    <input type="text" name="vulnerabilityId" class="mt-1 block w-full input-square-box shadow-sm font-size-9">
+                </div>
+                <div>
+                    <label class="block font-medium text-gray-700">Vulnerability Title</label>
+                    <input type="text" name="vulnerabilityTitle" class="mt-1 block w-full input-square-box shadow-sm font-size-9">
+                </div>
+                <div class="md:col-span-2">
+                    <label class="block font-medium text-gray-700">Affected Instances</label>
+                    <div class="affected-instances-container space-y-2 mt-1">
+                    </div>
+                    <button type="button" class="add-affected-btn bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-1 px-2 rounded-md mt-2 font-size-9">+ Add</button>
+                </div>
+                <div class="md:col-span-2">
+                    <label class="block font-medium text-gray-700">Description</label>
+                    <textarea name="description" rows="5" class="mt-1 block w-full input-square-box shadow-sm font-size-9"></textarea>
+                </div>
+                <div class="md:col-span-2">
+                    <label class="block font-medium text-gray-700">CVSS v3.1 Base Metrics</label>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mt-2 font-size-9 cvss-metrics">
+                    </div>
+                </div>
+                <div class="md:col-span-2">
+                    <label class="block font-medium text-gray-700">CVSS Score</label>
+                    <input type="text" name="cvssScore" class="mt-1 block w-full input-square-box shadow-sm font-size-9" readonly>
+                </div>
+                <div>
+                    <label class="block font-medium text-gray-700">Severity</label>
+                    <input type="text" name="severity" class="mt-1 block w-full input-square-box shadow-sm font-size-9" readonly>
+                </div>
+                <div class="md:col-span-2">
+                    <label class="block font-medium text-gray-700">EPSS Score</label>
+                    <div class="flex items-center space-x-4">
+                        <div class="flex items-center">
+                            <input type="radio" name="epssOption" value="default" class="mr-1" checked>
+                            <label class="font-size-9">Default</label>
+                        </div>
+                        <div class="flex items-center">
+                            <input type="radio" name="epssOption" value="other" class="mr-1">
+                            <label class="font-size-9">Other</label>
+                        </div>
+                    </div>
+                    <input type="text" name="epssScore" class="mt-2 block w-full input-square-box shadow-sm font-size-9" value="Not Applicable (EPSS applies only to CVE-based vulnerabilities)" readonly>
+                </div>
+                <div class="md:col-span-2">
+                    <label class="block font-medium text-gray-700">Impact</label>
+                    <textarea name="impact" rows="5" class="mt-1 block w-full input-square-box shadow-sm font-size-9"></textarea>
+                </div>
+                <div class="md:col-span-2">
+                    <label class="block font-medium text-gray-700">Proof-of-Concept Steps</label>
+                    <div class="poc-container space-y-2 mt-1">
+                    </div>
+                    <button type="button" class="add-poc-btn bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-1 px-2 rounded-md mt-2 font-size-9">+ Add POC Instance</button>
+                </div>
+                <div class="md:col-span-2">
+                    <label class="block font-medium text-gray-700">Remediation</label>
+                    <textarea name="remediation" rows="5" class="mt-1 block w-full input-square-box shadow-sm font-size-9"></textarea>
+                </div>
+                <div class="md:col-span-2">
+                    <label class="block font-medium text-gray-700">Reference Links</label>
+                    <div class="reference-links-container space-y-2 mt-1">
+                    </div>
+                    <button type="button" class="add-reference-btn bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-1 px-2 rounded-md mt-2 font-size-9">+ Add</button>
+                </div>
+
+                <div class="md:col-span-2 border border-gray-300 p-4 rounded-lg">
+                    <label class="block font-medium text-gray-700 font-size-10 mb-2">Closure Remarks</label>
+                    <div class="flex items-center space-x-4 mb-4">
+                        <div class="flex items-center">
+                            <input type="radio" name="includeRemarksOption" value="yes" class="mr-1">
+                            <label class="font-size-9">Include in report</label>
+                        </div>
+                        <div class="flex items-center">
+                            <input type="radio" name="includeRemarksOption" value="no" class="mr-1" checked>
+                            <label class="font-size-9">Exclude from report</label>
+                        </div>
+                    </div>
+                    <div class="closure-remarks-container space-y-2 mt-1 hidden">
+                    </div>
+                    <button type="button" class="add-closure-remarks-btn bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-1 px-2 rounded-md mt-2 font-size-9 hidden">+ Add Closure Remarks Instance</button>
+                </div>
+
+            </div>
+            <div class="flex justify-end mt-4">
+                <button type="button" class="remove-vulnerability-btn bg-red-500 hover:bg-red-600 text-white font-bold py-1 px-3 rounded-lg shadow-sm font-size-9">Remove</button>
+            </div>
+        </div>
+    </template>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const addVulnerabilityBtn = document.getElementById('addVulnerabilityBtn');
+            const previewBtn = document.getElementById('previewBtn');
+            const copyTableBtn = document.getElementById('copyTableBtn');
+            const vulnerabilityListContainer = document.getElementById('vulnerability-list-container');
+            const vulnerabilityTemplate = document.getElementById('vulnerability-template');
+            const reportContent = document.getElementById('reportContent');
+            const reportPreview = document.getElementById('reportPreview');
+
+            let vulnerabilityCount = 0;
+
+            const severityColors = {
+                'Critical': 'bg-red-800',
+                'High': 'bg-red-600',
+                'Medium': 'bg-orange-400',
+                'Low': 'bg-green-400'
+            };
+
+            const cvssMetrics = {
+                'AV': { 'Attack Vector': { 'Network': 0.85, 'Adjacent': 0.62, 'Local': 0.55, 'Physical': 0.2 } },
+                'AC': { 'Attack Complexity': { 'Low': 0.77, 'High': 0.44 } },
+                'PR': { 'Privileges Required': { 'None': 0.85, 'Low': 0.62, 'High': 0.27 } },
+                'UI': { 'User Interaction': { 'None': 0.85, 'Required': 0.62 } },
+                'S': { 'Scope': { 'Unchanged': 1.0, 'Changed': 1.08 } },
+                'C': { 'Confidentiality': { 'None': 0.0, 'Low': 0.22, 'High': 0.56 } },
+                'I': { 'Integrity': { 'None': 0.0, 'Low': 0.22, 'High': 0.56 } },
+                'A': { 'Availability': { 'None': 0.0, 'Low': 0.22, 'High': 0.56 } }
+            };
+
+            const roundUp = (num) => Math.ceil(num * 10) / 10;
+
+            const calculateCvssScore = (card) => {
+                let score = 0;
+
+                const getMetricValue = (metricCode) => {
+                    const selected = card.querySelector(`input[name="cvss-${metricCode}-${card.id}"]:checked`);
+                    return selected ? parseFloat(selected.value) : 0;
+                };
+
+                const av = getMetricValue('AV');
+                const ac = getMetricValue('AC');
+                const pr = getMetricValue('PR');
+                const ui = getMetricValue('UI');
+                const s = getMetricValue('S');
+                const c = getMetricValue('C');
+                const i = getMetricValue('I');
+                const a = getMetricValue('A');
+
+                const impactSubscore = 1 - ((1 - c) * (1 - i) * (1 - a));
+                const exploitability = 8.22 * av * ac * pr * ui;
+
+                let impact;
+                if (s === 1.0) { // Scope is Unchanged
+                    impact = 6.42 * impactSubscore;
+                } else { // Scope is Changed
+                    impact = 7.52 * (impactSubscore - 0.029) - 3.25 * Math.pow(impactSubscore - 0.02, 15);
+                }
+
+                if (impact <= 0) {
+                    score = 0;
+                } else {
+                    if (s === 1.0) { // Scope is Unchanged
+                        score = roundUp(Math.min(impact + exploitability, 10));
+                    } else { // Scope is Changed
+                        score = roundUp(Math.min(1.08 * (impact + exploitability), 10));
+                    }
+                }
+
+                const cvssScoreInput = card.querySelector('[name="cvssScore"]');
+                if(cvssScoreInput) cvssScoreInput.value = score.toFixed(1);
+
+                let severity = 'N/A';
+                let severityClass = 'bg-gray-400';
+                if (score >= 9.0) {
+                    severity = 'Critical';
+                    severityClass = severityColors['Critical'];
+                } else if (score >= 7.0) {
+                    severity = 'High';
+                    severityClass = severityColors['High'];
+                } else if (score >= 4.0) {
+                    severity = 'Medium';
+                    severityClass = severityColors['Medium'];
+                } else if (score > 0) {
+                    severity = 'Low';
+                    severityClass = severityColors['Low'];
+                }
+
+                const severityInput = card.querySelector('[name="severity"]');
+                if(severityInput) {
+                    severityInput.value = severity;
+                    severityInput.className = `mt-1 block w-full input-square-box shadow-sm font-size-9 ${severityClass} text-white text-center`;
+                }
+            };
+
+            const createMetricRadios = (card, metricCode, metricName, options) => {
+                const metricContainer = card.querySelector('.cvss-metrics');
+                const metricDiv = document.createElement('div');
+                metricDiv.className = 'flex flex-col';
+                const label = document.createElement('span');
+                label.className = 'font-bold mb-1';
+                label.textContent = metricCode;
+                metricDiv.appendChild(label);
+                
+                for (const option in options) {
+                    const optionValue = options[option];
+                    const optionId = `cvss-${metricCode}-${option.replace(/\s/g, '')}-${card.id}`;
+                    const wrapper = document.createElement('div');
+                    wrapper.className = 'flex items-center';
+
+                    const radio = document.createElement('input');
+                    radio.type = 'radio';
+                    radio.id = optionId;
+                    radio.name = `cvss-${metricCode}-${card.id}`;
+                    radio.value = optionValue;
+                    radio.className = 'mr-1';
+                    
+                    const optionLabel = document.createElement('label');
+                    optionLabel.htmlFor = optionId;
+                    optionLabel.textContent = option;
+                    
+                    wrapper.appendChild(radio);
+                    wrapper.appendChild(optionLabel);
+                    metricDiv.appendChild(wrapper);
+
+                    radio.addEventListener('change', () => {
+                        calculateCvssScore(card);
+                        saveData();
+                    });
+                }
+                metricContainer.appendChild(metricDiv);
+            };
+
+            const addAffectedInstance = (container, value = '') => {
+                const inputId = `affected-${Math.random().toString(36).substr(2, 9)}`;
+                const wrapper = document.createElement('div');
+                wrapper.className = "flex items-center gap-1";
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.name = "affectedInstances[]";
+                input.id = inputId;
+                input.className = "mt-1 block w-full input-square-box shadow-sm font-size-9";
+                input.placeholder = "e.g., /portal/passwordReset";
+                input.value = value;
+                input.addEventListener('input', saveData);
+                const removeBtn = document.createElement('button');
+                removeBtn.type = "button";
+                removeBtn.textContent = "X";
+                removeBtn.className = "text-red-500 hover:text-red-700 font-bold p-1";
+                removeBtn.addEventListener('click', () => {
+                    if (confirm('Are you sure you want to remove this instance?')) {
+                        wrapper.remove();
+                        saveData();
+                    }
+                });
+                wrapper.appendChild(input);
+                wrapper.appendChild(removeBtn);
+                container.appendChild(wrapper);
+            };
+
+            const addPocOrRemarksInstance = (container, value = '', images = []) => {
+                const pocId = `poc-${Math.random().toString(36).substr(2, 9)}`;
+                const wrapper = document.createElement('div');
+                wrapper.className = "poc-instance relative border border-gray-300 p-2 rounded-md mb-2";
+                
+                const textarea = document.createElement('textarea');
+                textarea.name = "pocSteps[]";
+                textarea.id = pocId;
+                textarea.rows = "3";
+                textarea.className = "mt-1 block w-full input-square-box shadow-sm font-size-9";
+                textarea.placeholder = "Enter steps here...";
+                textarea.value = value;
+                textarea.addEventListener('input', saveData);
+                
+                const imageContainer = document.createElement('div');
+                imageContainer.className = "flex flex-col space-y-2 mt-2";
+                
+                const addImageInput = (imageData = '') => {
+                    const imageWrapper = document.createElement('div');
+                    imageWrapper.className = "flex flex-col";
+                    
+                    const fileInput = document.createElement('input');
+                    fileInput.type = 'file';
+                    fileInput.accept = 'image/*';
+                    fileInput.name = 'pocImage[]';
+                    fileInput.className = "mt-2 font-size-9";
+                    
+                    const imagePreview = document.createElement('img');
+                    imagePreview.className = `mt-2 max-w-full h-auto ${imageData ? '' : 'hidden'} image-with-lightblue-border`;
+                    imagePreview.src = imageData;
+
+                    const removeImageBtn = document.createElement('button');
+                    removeImageBtn.type = 'button';
+                    removeImageBtn.textContent = 'Remove Image';
+                    removeImageBtn.className = "bg-red-200 text-red-700 py-1 px-2 rounded-md font-size-9 mt-1";
+                    removeImageBtn.addEventListener('click', () => {
+                        if (confirm('Are you sure you want to remove this image?')) {
+                            imageWrapper.remove();
+                            saveData();
+                        }
+                    });
+
+                    fileInput.addEventListener('change', (e) => {
+                        const file = e.target.files[0];
+                        if (file) {
+                            const reader = new FileReader();
+                            reader.onload = (event) => {
+                                imagePreview.src = event.target.result;
+                                imagePreview.classList.remove('hidden');
+                                addImageInput();
+                                saveData();
+                            };
+                            reader.readAsDataURL(file);
+                        } else {
+                            imagePreview.src = '';
+                            imagePreview.classList.add('hidden');
+                            saveData();
+                        }
+                    });
+
+                    imageWrapper.appendChild(fileInput);
+                    imageWrapper.appendChild(imagePreview);
+                    imageWrapper.appendChild(removeImageBtn);
+                    imageContainer.appendChild(imageWrapper);
+                };
+
+                // Handle pasting images
+                textarea.addEventListener('paste', (e) => {
+                    const items = (e.clipboardData || e.originalEvent.clipboardData).items;
+                    for (const item of items) {
+                        if (item.type.indexOf('image') !== -1) {
+                            e.preventDefault();
+                            const file = item.getAsFile();
+                            const reader = new FileReader();
+                            reader.onload = (event) => {
+                                // Add the new image
+                                addImageInput(event.target.result);
+                                saveData();
+                            };
+                            reader.readAsDataURL(file);
+                            break;
+                        }
+                    }
+                });
+
+                const removeBtn = document.createElement('button');
+                removeBtn.type = "button";
+                removeBtn.textContent = "X";
+                removeBtn.className = "absolute top-0 right-0 text-red-500 hover:text-red-700 font-bold p-1";
+                removeBtn.addEventListener('click', () => {
+                    if (confirm('Are you sure you want to remove this instance?')) {
+                        wrapper.remove();
+                        saveData();
+                    }
+                });
+                
+                wrapper.appendChild(removeBtn);
+                wrapper.appendChild(textarea);
+                wrapper.appendChild(imageContainer);
+                
+                container.appendChild(wrapper);
+                images.forEach(image => addImageInput(image));
+                if (images.length === 0) {
+                    addImageInput();
+                }
+            };
+
+            const addReferenceLink = (container, value = '') => {
+                const inputId = `ref-${Math.random().toString(36).substr(2, 9)}`;
+                const wrapper = document.createElement('div');
+                wrapper.className = "flex items-center gap-1";
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.name = "referenceLinks[]";
+                input.id = inputId;
+                input.className = "mt-1 block w-full input-square-box shadow-sm font-size-9";
+                input.placeholder = "e.g., https://example.com";
+                input.value = value;
+                input.addEventListener('input', saveData);
+                const removeBtn = document.createElement('button');
+                removeBtn.type = "button";
+                removeBtn.textContent = "X";
+                removeBtn.className = "text-red-500 hover:text-red-700 font-bold p-1";
+                removeBtn.addEventListener('click', () => {
+                    if (confirm('Are you sure you want to remove this reference link?')) {
+                        wrapper.remove();
+                        saveData();
+                    }
+                });
+                wrapper.appendChild(input);
+                wrapper.appendChild(removeBtn);
+                container.appendChild(wrapper);
+            };
+
+            const addVulnerability = (data = null) => {
+                vulnerabilityCount++;
+                const newCard = vulnerabilityTemplate.content.cloneNode(true);
+                const cardDiv = newCard.querySelector('.vulnerability-card');
+                const cardId = `vulnerability-card-${vulnerabilityCount}`;
+                cardDiv.setAttribute('data-vulnerability-id', cardId);
+                cardDiv.id = cardId;
+                newCard.querySelector('h3').textContent = `Vulnerability #${vulnerabilityCount}`;
+                
+                const removeBtn = newCard.querySelector('.remove-vulnerability-btn');
+                removeBtn.addEventListener('click', () => {
+                    if (confirm('Are you sure you want to remove this vulnerability?')) {
+                        cardDiv.remove();
+                        saveData();
+                        reportContent.innerHTML = '';
+                        reportPreview.classList.add('hidden');
+                    }
+                });
+                
+                const affectedBtn = newCard.querySelector('.add-affected-btn');
+                const affectedContainer = newCard.querySelector('.affected-instances-container');
+                affectedBtn.addEventListener('click', () => addAffectedInstance(affectedContainer));
+
+                const pocBtn = newCard.querySelector('.add-poc-btn');
+                const pocContainer = newCard.querySelector('.poc-container');
+                pocBtn.addEventListener('click', () => addPocOrRemarksInstance(pocContainer));
+
+                const refBtn = newCard.querySelector('.add-reference-btn');
+                const refContainer = newCard.querySelector('.reference-links-container');
+                refBtn.addEventListener('click', () => addReferenceLink(refContainer));
+
+                const closureRemarksContainer = newCard.querySelector('.closure-remarks-container');
+                const addClosureRemarksBtn = newCard.querySelector('.add-closure-remarks-btn');
+                const includeRemarksRadio = newCard.querySelector('input[name="includeRemarksOption"][value="yes"]');
+                const excludeRemarksRadio = newCard.querySelector('input[name="includeRemarksOption"][value="no"]');
+
+                addClosureRemarksBtn.addEventListener('click', () => addPocOrRemarksInstance(closureRemarksContainer));
+                
+                includeRemarksRadio.addEventListener('change', () => {
+                    closureRemarksContainer.classList.remove('hidden');
+                    addClosureRemarksBtn.classList.remove('hidden');
+                    if (closureRemarksContainer.children.length === 0) {
+                        addPocOrRemarksInstance(closureRemarksContainer);
+                    }
+                    saveData();
+                });
+
+                excludeRemarksRadio.addEventListener('change', () => {
+                    closureRemarksContainer.classList.add('hidden');
+                    addClosureRemarksBtn.classList.add('hidden');
+                    saveData();
+                });
+                
+                vulnerabilityListContainer.appendChild(newCard);
+                const currentCard = document.querySelector(`[data-vulnerability-id="${cardId}"]`);
+
+                for (const metricCode in cvssMetrics) {
+                    for (const metricName in cvssMetrics[metricCode]) {
+                        createMetricRadios(currentCard, metricCode, metricName, cvssMetrics[metricCode][metricName]);
+                    }
+                }
+                
+                if (data) {
+                    currentCard.querySelector('[name="vulnerabilityId"]').value = data.id || vulnerabilityCount;
+                    currentCard.querySelector('[name="vulnerabilityTitle"]').value = data.title || '';
+                    currentCard.querySelector('[name="description"]').value = data.description || '';
+                    currentCard.querySelector('[name="impact"]').value = data.impact || '';
+                    currentCard.querySelector('[name="remediation"]').value = data.remediation || '';
+                    
+                    if (data.cvssMetrics) {
+                        for (const metricCode in data.cvssMetrics) {
+                            const value = data.cvssMetrics[metricCode];
+                            const radio = currentCard.querySelector(`input[name="cvss-${metricCode}-${cardId}"][value="${value}"]`);
+                            if (radio) radio.checked = true;
+                        }
+                    }
+
+                    if (data.epssOption) {
+                        const radio = currentCard.querySelector(`input[name="epssOption"][value="${data.epssOption}"]`);
+                        if(radio) radio.checked = true;
+                        const epssInput = currentCard.querySelector('[name="epssScore"]');
+                        epssInput.readOnly = (data.epssOption === 'default');
+                        epssInput.value = data.epssScore || '';
+                    }
+
+                    if (data.includeRemarks) {
+                        includeRemarksRadio.checked = true;
+                        closureRemarksContainer.classList.remove('hidden');
+                        addClosureRemarksBtn.classList.remove('hidden');
+                    }
+
+                    data.affectedInstances.forEach(value => addAffectedInstance(affectedContainer, value));
+                    data.pocInstances.forEach(pocData => addPocOrRemarksInstance(pocContainer, pocData.text, pocData.images));
+                    data.referenceLinks.forEach(value => addReferenceLink(refContainer, value));
+                    data.closureRemarksInstances.forEach(remarksData => addPocOrRemarksInstance(closureRemarksContainer, remarksData.text, remarksData.images));
+
+                } else {
+                    addPocOrRemarksInstance(currentCard.querySelector('.poc-container'));
+                    addAffectedInstance(currentCard.querySelector('.affected-instances-container'));
+                    addReferenceLink(currentCard.querySelector('.reference-links-container'));
+                }
+
+                calculateCvssScore(currentCard);
+                
+                currentCard.querySelectorAll('input, textarea').forEach(input => {
+                    input.addEventListener('input', saveData);
+                });
+                currentCard.querySelectorAll('input[type="radio"]').forEach(radio => {
+                    radio.addEventListener('change', saveData);
+                });
+
+                // EPSS radio button logic
+                const epssRadios = currentCard.querySelectorAll('input[name="epssOption"]');
+                const epssInput = currentCard.querySelector('input[name="epssScore"]');
+                epssRadios.forEach(radio => {
+                    radio.addEventListener('change', (e) => {
+                        if (e.target.value === 'other') {
+                            epssInput.readOnly = false;
+                            epssInput.value = '';
+                            epssInput.focus();
+                        } else {
+                            epssInput.readOnly = true;
+                            epssInput.value = 'Not Applicable (EPSS applies only to CVE-based vulnerabilities)';
+                        }
+                        saveData();
+                    });
+                });
+            };
+
+            const saveData = () => {
+                const vulnerabilities = [];
+                document.querySelectorAll('.vulnerability-card').forEach(card => {
+                    const affectedInstances = Array.from(card.querySelectorAll('[name="affectedInstances[]"]')).map(input => input.value);
+                    const pocInstances = Array.from(card.querySelectorAll('.poc-container .poc-instance')).map(div => {
+                        const text = div.querySelector('[name="pocSteps[]"]').value;
+                        const images = Array.from(div.querySelectorAll('img')).filter(img => !img.classList.contains('hidden')).map(img => img.src);
+                        return { text, images };
+                    });
+                    const referenceLinks = Array.from(card.querySelectorAll('[name="referenceLinks[]"]')).map(input => input.value);
+                    const closureRemarksInstances = Array.from(card.querySelectorAll('.closure-remarks-container .poc-instance')).map(div => {
+                        const text = div.querySelector('textarea').value;
+                        const images = Array.from(div.querySelectorAll('img')).filter(img => !img.classList.contains('hidden')).map(img => img.src);
+                        return { text, images };
+                    });
+
+                    const cvssMetricsData = {};
+                    ['AV', 'AC', 'PR', 'UI', 'S', 'C', 'I', 'A'].forEach(metric => {
+                        const selected = card.querySelector(`input[name="cvss-${metric}-${card.id}"]:checked`);
+                        if (selected) cvssMetricsData[metric] = selected.value;
+                    });
+                    
+                    const epssRadio = card.querySelector('input[name="epssOption"]:checked');
+                    const includeRemarksRadio = card.querySelector('input[name="includeRemarksOption"]:checked');
+                    
+                    vulnerabilities.push({
+                        id: card.querySelector('[name="vulnerabilityId"]').value,
+                        title: card.querySelector('[name="vulnerabilityTitle"]').value,
+                        description: card.querySelector('[name="description"]').value,
+                        impact: card.querySelector('[name="impact"]').value,
+                        remediation: card.querySelector('[name="remediation"]').value,
+                        cvssMetrics: cvssMetricsData,
+                        epssOption: epssRadio ? epssRadio.value : 'default',
+                        epssScore: card.querySelector('[name="epssScore"]').value,
+                        includeRemarks: includeRemarksRadio ? (includeRemarksRadio.value === 'yes') : false,
+                        affectedInstances,
+                        pocInstances,
+                        referenceLinks,
+                        closureRemarksInstances
+                    });
+                });
+
+                localStorage.setItem('securityReportData', JSON.stringify(vulnerabilities));
+            };
+
+            const loadData = () => {
+                const savedData = localStorage.getItem('securityReportData');
+                if (savedData) {
+                    const data = JSON.parse(savedData);
+                    if (data.length > 0) {
+                        vulnerabilityListContainer.innerHTML = '';
+                        data.forEach(vulnData => addVulnerability(vulnData));
+                        vulnerabilityCount = data.length;
+                    } else {
+                        addVulnerability();
+                    }
+                } else {
+                    addVulnerability();
+                }
+            };
+
+            const generateReport = () => {
+                const vulnerabilityCards = document.querySelectorAll('.vulnerability-card');
+                let reportHtml = '';
+
+                vulnerabilityCards.forEach((card, vulIndex) => {
+                    const vulnerabilityId = card.querySelector('[name="vulnerabilityId"]').value || 'N/A';
+                    const vulnerabilityTitle = card.querySelector('[name="vulnerabilityTitle"]').value || 'N/A';
+                    const affectedInstances = Array.from(card.querySelectorAll('[name="affectedInstances[]"]'));
+                    const affectedHtml = affectedInstances.filter(input => input.value.trim() !== '').length > 1 ? affectedInstances.filter(input => input.value.trim() !== '').map((input, index) => `<p class="no-margin font-size-9 leading-tight text-black">Instance #${index + 1}: ${input.value.trim()}</p>`).join('') : affectedInstances.filter(input => input.value.trim() !== '').map(input => `<p class="no-margin font-size-9 leading-tight text-black">${input.value.trim()}</p>`).join('');
+                    const description = card.querySelector('[name="description"]').value || 'N/A';
+                    const cvssScore = card.querySelector('[name="cvssScore"]').value || 'N/A';
+                    const severity = card.querySelector('[name="severity"]').value || 'N/A';
+                    const epssScore = card.querySelector('[name="epssScore"]').value || 'N/A';
+                    const impact = card.querySelector('[name="impact"]').value || 'N/A';
+                    const remediation = card.querySelector('[name="remediation"]').value || 'N/A';
+                    const referenceLinks = Array.from(card.querySelectorAll('[name="referenceLinks[]"]')).filter(input => input.value.trim() !== '').map(input => `<li class="font-size-9 leading-tight text-black"><a href="${input.value.trim()}" style="color:blue;">${input.value.trim()}</a></li>`).join('');
+
+                    const pocInstances = Array.from(card.querySelectorAll('.poc-container .poc-instance'));
+                    const pocHtml = pocInstances.map((instanceDiv, index) => {
+                        const textarea = instanceDiv.querySelector('[name="pocSteps[]"]');
+                        const images = Array.from(instanceDiv.querySelectorAll('img')).filter(img => !img.classList.contains('hidden'));
+                        
+                        // User request: No bullets for POC
+                        const steps = textarea && textarea.value.trim() !== '' ? `
+                            <p class="no-margin font-size-9 leading-snug text-black">${textarea.value.trim().split('\n').filter(Boolean).map(item => item.trim()).join('<br>')}</p>
+                        ` : '';
+                        
+                        // Added image-with-lightblue-border class in report generation
+                        const imageHtml = images.map(img => `<img src="${img.src}" class="image-with-lightblue-border" style="max-width: 100%; height: auto; margin-top: 10px;" />`).join('');
+
+                        const instanceHeader = pocInstances.filter(inst => inst.querySelector('[name="pocSteps[]"]').value.trim() !== '' || inst.querySelectorAll('img').length > 0).length > 1 ? `<p class="no-margin text-black text-xs font-bold leading-tight mt-2">Instance #${index + 1}:</p>` : '';
+
+                        if (steps === '' && imageHtml === '') return '';
+                        return `${instanceHeader}${steps}${imageHtml}`;
+                    }).join('');
+
+                    const severityBgClass = severityColors[severity] || 'bg-gray-400';
+
+                    let closureRemarksRows = '';
+                    if (card.querySelector('input[name="includeRemarksOption"]:checked').value === 'yes') {
+                        const closureRemarksInstances = Array.from(card.querySelectorAll('.closure-remarks-container .poc-instance'));
+                        const remarksContentHtml = closureRemarksInstances.map((instanceDiv, index) => {
+                            const textarea = instanceDiv.querySelector('textarea');
+                            const images = Array.from(instanceDiv.querySelectorAll('img')).filter(img => !img.classList.contains('hidden'));
+                            
+                            const remarksText = textarea && textarea.value.trim() !== '' ? `
+                                <p class="no-margin font-size-9 leading-tight text-black">${textarea.value.trim().split('\n').filter(Boolean).map(item => item.trim()).join('<br>')}</p>
+                            ` : '';
+                            // Added image-with-lightblue-border class in report generation
+                            const imageHtml = images.map(img => `<img src="${img.src}" class="image-with-lightblue-border" style="max-width: 100%; height: auto; margin-top: 10px;" />`).join('');
+                            
+                            const space = (index > 0 && (remarksText !== '' || imageHtml !== '')) ? '<div style="margin-top: 10px;"></div>' : '';
+                            const instanceHeader = closureRemarksInstances.filter(inst => inst.querySelector('textarea').value.trim() !== '' || inst.querySelectorAll('img').length > 0).length > 1 ? `<p class="no-margin text-black text-xs font-bold leading-tight mt-2">Instance #${index + 1}:</p>` : '';
+
+                            if (remarksText === '' && imageHtml === '') return '';
+                            return `${instanceHeader}${space}${remarksText}${imageHtml}`;
+                        }).join('');
+
+                        if (remarksContentHtml.trim() !== '') {
+                            closureRemarksRows = `
+                                <tr>
+                                    <td class="report-cell w-36 bg-blue-900 text-white report-cell-header">
+                                        Closure Remarks:
+                                    </td>
+                                    <td colspan="2" class="report-cell">
+                                        ${remarksContentHtml}
+                                    </td>
+                                </tr>
+                            `;
+                        }
+                    }
+
+                    reportHtml += `
+                        <div align="center" style='margin:0cm;font-size:9px;font-family:Verdana,sans-serif;'>
+                            <table class="report-table" style="width: 718px;">
+                                <tbody>
+                                    <tr>
+                                        <td class="report-cell report-cell-header w-36 bg-blue-900 text-white text-left">
+                                            ${vulnerabilityId}
+                                        </td>
+                                        <td class="report-cell w-80 font-semibold text-gray-900 report-cell-header">
+                                            ${vulnerabilityTitle}
+                                        </td>
+                                        <td class="report-cell w-32 ${severityBgClass} text-white text-center report-cell-header">
+                                            ${severity}
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td class="report-cell w-36 bg-blue-900 text-white report-cell-header">
+                                            Affected Instances:
+                                        </td>
+                                        <td colspan="2" class="report-cell">
+                                            ${affectedHtml || 'N/A'}
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td class="report-cell w-36 bg-blue-900 text-white report-cell-header">
+                                            Description:
+                                        </td>
+                                        <td colspan="2" class="report-cell">
+                                            <p class="no-margin font-size-9 leading-snug text-black">${description}</p>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td class="report-cell w-36 bg-blue-900 text-white report-cell-header">
+                                            CVSS Score:
+                                        </td>
+                                        <td colspan="2" class="report-cell">
+                                            <p class="no-margin font-size-9 leading-snug text-black">${cvssScore}</p>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td class="report-cell w-36 bg-blue-900 text-white report-cell-header">
+                                            EPSS Score:
+                                        </td>
+                                        <td colspan="2" class="report-cell">
+                                            <p class="no-margin font-size-9 leading-snug text-black">${epssScore}</p>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td class="report-cell w-36 bg-blue-900 text-white report-cell-header">
+                                            Impact:
+                                        </td>
+                                        <td colspan="2" class="report-cell">
+                                            <p class="no-margin font-size-9 leading-snug text-black">${impact}</p>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td class="report-cell w-36 bg-blue-900 text-white report-cell-header">
+                                            Proof-of-Concept:
+                                        </td>
+                                        <td colspan="2" class="report-cell">
+                                            ${pocHtml || 'N/A'}
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td class="report-cell w-36 bg-blue-900 text-white report-cell-header">
+                                            Remediation:
+                                        </td>
+                                        <td colspan="2" class="report-cell">
+                                            <p class="no-margin font-size-9 leading-snug text-black">${remediation}</p>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td class="report-cell w-36 bg-blue-900 text-white report-cell-header">
+                                            Reference Links:
+                                        </td>
+                                        <td colspan="2" class="report-cell">
+                                            <ul class="list-disc pl-4 space-y-1">
+                                                ${referenceLinks || '<li>N/A</li>'}
+                                            </ul>
+                                        </td>
+                                    </tr>
+                                    ${closureRemarksRows}
+                                </tbody>
+                            </table>
+                        </div>
+                    `;
+                });
+
+                reportContent.innerHTML = reportHtml;
+                reportPreview.classList.remove('hidden');
+            };
+
+            const copyReportTable = async () => {
+                generateReport();
+                const reportTable = reportContent.querySelector('.report-table');
+                if (!reportTable) {
+                    alert('No report table to copy!');
+                    return;
+                }
+
+                try {
+                    // Create a temporary element to hold the table and copy its content
+                    const tempDiv = document.createElement('div');
+                    tempDiv.innerHTML = reportTable.outerHTML;
+                    document.body.appendChild(tempDiv);
+                    
+                    const range = document.createRange();
+                    range.selectNode(tempDiv);
+                    window.getSelection().removeAllRanges();
+                    window.getSelection().addRange(range);
+                    
+                    document.execCommand('copy');
+                    window.getSelection().removeAllRanges();
+                    
+                    document.body.removeChild(tempDiv);
+
+                    alert('Report table copied to clipboard!');
+                } catch (err) {
+                    console.error('Failed to copy: ', err);
+                    alert('Failed to copy the table. Please try manually copying from the preview.');
+                }
+            };
+            
+            addVulnerabilityBtn.addEventListener('click', () => addVulnerability());
+            previewBtn.addEventListener('click', generateReport);
+            copyTableBtn.addEventListener('click', copyReportTable);
+            loadData();
+        });
+    </script>
+</body>
+</html>
+
